@@ -14,7 +14,7 @@ class SentenceEncoding:
         return np.array(encoded)
 
     def encode(self, sentence, padding):
-        tokens = [self.vocab.start_token] + sentence.split(self.delimiter) + [self.vocab.end_token]
+        tokens = sentence.split(self.delimiter)
         size = len(tokens)
         tokens = tokens + max(0, padding - size) * [self.vocab.end_token]
         return np.array([self.vocab.encode(token) for token in tokens])
