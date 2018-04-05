@@ -13,8 +13,8 @@ class DataGenerator:
             try:
                 src = next(self.src_file)
                 dst = next(self.dst_file)
-                inputs.append(src)
-                outputs.append(dst)
+                inputs.append(src.replace('\n', ''))
+                outputs.append(dst.replace('\n', ''))
                 total += 1
             except:
                 self._close_files()

@@ -49,8 +49,6 @@ class NMTModel:
 
         def feed_fn():
             inputs, outputs = batch_generator.next_batch(self.args.batch_size)
-            print(inputs)
-            print(outputs)
             encoded_inputs = self.src_encoding.encode_batch(inputs, self.args.max_sentence_length)
             encoded_outputs = self.dst_encoding.encode_batch(outputs, self.args.max_sentence_length)
             return {
