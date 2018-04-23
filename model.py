@@ -5,6 +5,7 @@ import tensorflow.contrib.layers as layers
 import numpy as np
 from data_utils import DataGenerator, prepare_sentence
 
+BEAM_WIDTH = 5
 
 def seq2seq(mode, features, labels, params):
     src_vocab_size = params['src_vocab_size']
@@ -66,8 +67,41 @@ def seq2seq(mode, features, labels, params):
             )
             return outputs[0]
 
+    def beam_decode(scope, beam_width, reuse=None):
+        with tf.variable_scope(scope, reuse=reuse):
+            tiled_encoder_outputs = tf.contrib.seq2seq.tile_batch(
+                encoder_outputs, multiplier=beam_width)
+            tiled_encoder_final_state = tf.contrib.seq2seq.tile_batch(
+                encoder_final_state, multiplier=beam_width)
+            tiled_sequence_length = tf.contrib.seq2seq.tile_batch(
+                lengths, multiplier=beam_width)
+
+            attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(
+                num_units=num_units, memory=tiled_encoder_outputs, memory_sequence_length=tiled_sequence_length)
+            cell = tf.contrib.rnn.LSTMCell(num_units=num_units)
+            attn_cell = tf.contrib.seq2seq.AttentionWrapper(
+                cell, attention_mechanism, attention_layer_size=num_units)
+            out_cell = tf.contrib.rnn.OutputProjectionWrapper(
+                attn_cell, dst_vocab_size, reuse=reuse
+            )
+
+            decoder_initial_state = attn_cell.zero_state(
+                dtype=tf.float32, batch_size=batch_size * beam_width)
+            decoder_initial_state = decoder_initial_state.clone(
+                cell_state=tiled_encoder_final_state)
+            #Tu mozna dodac kare za dlugosc zdania
+            decoder = tf.contrib.seq2seq.BeamSearchDecoder(cell=out_cell, embedding=embeddings,
+                start_tokens=tf.to_int32(start_tokens), end_token=end_token, initial_state=decoder_initial_state,
+                beam_width=beam_width)
+            outputs = tf.contrib.seq2seq.dynamic_decode(
+                decoder=decoder, output_time_major=False,
+                impute_finished=True, maximum_iterations=max_length
+            )
+            return outputs[0]           
+            
+
     train_outputs = decode(train_helper, 'decode')
-    pred_outputs = decode(pred_helper, 'decode', reuse=True)
+    pred_outputs = beam_decode('decode', BEAM_WIDTH, True)
 
 
 
