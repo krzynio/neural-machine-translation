@@ -5,7 +5,7 @@ import tensorflow.contrib.layers as layers
 import numpy as np
 from data_utils import DataGenerator, prepare_sentence
 
-BEAM_WIDTH = 5
+BEAM_WIDTH = 2
 
 def seq2seq(mode, features, labels, params):
     src_vocab_size = params['src_vocab_size']
@@ -93,14 +93,16 @@ def seq2seq(mode, features, labels, params):
             decoder = tf.contrib.seq2seq.BeamSearchDecoder(cell=out_cell, embedding=embeddings,
                 start_tokens=tf.to_int32(start_tokens), end_token=end_token, initial_state=decoder_initial_state,
                 beam_width=beam_width)
-            outputs = tf.contrib.seq2seq.dynamic_decode(
+            outputs, _, _ = tf.contrib.seq2seq.dynamic_decode(
                 decoder=decoder, output_time_major=False,
-                impute_finished=True, maximum_iterations=max_length
+                impute_finished=False, maximum_iterations=max_length
             )
-            return outputs[0]           
+
+            return outputs 
             
 
     train_outputs = decode(train_helper, 'decode')
+    # pred_outputs = decode(pred_helper, 'decode', True)
     pred_outputs = beam_decode('decode', BEAM_WIDTH, True)
 
 
@@ -124,10 +126,13 @@ def seq2seq(mode, features, labels, params):
             learning_rate=params.get('learning_rate', 0.001),
             summaries=['loss', 'learning_rate'])
 
-    tf.identity(pred_outputs.sample_id[0], name='predictions')
+    # tf.identity(pred_outputs.sample_id[0], name='predictions')
+    print()
+    tf.identity(pred_outputs.predicted_ids[0], name='predictions')
     return tf.estimator.EstimatorSpec(
         mode=mode,
-        predictions=pred_outputs.rnn_output,
+        # predictions=pred_outputs.rnn_output,
+        predictions=pred_outputs.predicted_ids,
         loss=loss,
         train_op=train_op
     )
@@ -259,8 +264,12 @@ def predict_loop(estimator, data_generator, padding=45):
         batch = np.array([encode(raw_inp)])
         print('Input: {}'.format(decode(batch[0], src_vocab)))
         result = next(estimator.predict(input_fn=lambda: {'input': batch, 'output': batch}))
-        result = np.argmax(result, axis=1)
-        print('Prediction: {}'.format(decode(result, dst_vocab)))
+        print("RESULT")
+        # result = np.argmax(result, axis=1)
+        print(result)
+        # print('Prediction: {}'.format(decode(result, dst_vocab)))
+        for i in result.T:
+            print('Prediction: {}'.format(decode(i, dst_vocab)))
 
 if __name__ == '__main__':
     data_generator = DataGenerator('vocab/vocab_subtitles_40000.pl', 'data/input_subtitles_validation.pl', 'vocab/vocab_subtitles_40000.en', 'data/input_subtitles_validation.en')
