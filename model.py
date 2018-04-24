@@ -5,7 +5,7 @@ import tensorflow.contrib.layers as layers
 import numpy as np
 from data_utils import DataGenerator, prepare_sentence
 
-BEAM_WIDTH = 2
+BEAM_WIDTH = 1
 
 def seq2seq(mode, features, labels, params):
     src_vocab_size = params['src_vocab_size']
@@ -49,7 +49,7 @@ def seq2seq(mode, features, labels, params):
 
     def decode(helper, scope, reuse=None):
         with tf.variable_scope(scope, reuse=reuse):
-            attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(
+            attention_mechanism = tf.contrib.seq2seq.LuongAttention(
                 num_units=num_units, memory=encoder_outputs, memory_sequence_length=lengths)
             cell = tf.contrib.rnn.LSTMCell(num_units=num_units)
             attn_cell = tf.contrib.seq2seq.AttentionWrapper(
@@ -76,7 +76,7 @@ def seq2seq(mode, features, labels, params):
             tiled_sequence_length = tf.contrib.seq2seq.tile_batch(
                 lengths, multiplier=beam_width)
 
-            attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(
+            attention_mechanism = tf.contrib.seq2seq.LuongAttention(
                 num_units=num_units, memory=tiled_encoder_outputs, memory_sequence_length=tiled_sequence_length)
             cell = tf.contrib.rnn.LSTMCell(num_units=num_units)
             attn_cell = tf.contrib.seq2seq.AttentionWrapper(
@@ -93,17 +93,16 @@ def seq2seq(mode, features, labels, params):
             decoder = tf.contrib.seq2seq.BeamSearchDecoder(cell=out_cell, embedding=embeddings,
                 start_tokens=tf.to_int32(start_tokens), end_token=end_token, initial_state=decoder_initial_state,
                 beam_width=beam_width)
-            outputs, _, _ = tf.contrib.seq2seq.dynamic_decode(
+            outputs, state, lens = tf.contrib.seq2seq.dynamic_decode(
                 decoder=decoder, output_time_major=False,
                 impute_finished=False, maximum_iterations=max_length
             )
-
-            return outputs 
+            return outputs
             
 
     train_outputs = decode(train_helper, 'decode')
-    # pred_outputs = decode(pred_helper, 'decode', True)
-    pred_outputs = beam_decode('decode', BEAM_WIDTH, True)
+    pred_outputs = decode(pred_helper, 'decode', True)
+    # pred_outputs = beam_decode('decode', BEAM_WIDTH, True)
 
 
 
@@ -127,12 +126,11 @@ def seq2seq(mode, features, labels, params):
             summaries=['loss', 'learning_rate'])
 
     # tf.identity(pred_outputs.sample_id[0], name='predictions')
-    print()
-    tf.identity(pred_outputs.predicted_ids[0], name='predictions')
+    # tf.identity(pred_outputs.predicted_ids[0], name='predictions')
     return tf.estimator.EstimatorSpec(
         mode=mode,
-        # predictions=pred_outputs.rnn_output,
-        predictions=pred_outputs.predicted_ids,
+        predictions=pred_outputs.rnn_output,
+        # predictions=pred_outputs.predicted_ids,
         loss=loss,
         train_op=train_op
     )
@@ -264,12 +262,12 @@ def predict_loop(estimator, data_generator, padding=45):
         batch = np.array([encode(raw_inp)])
         print('Input: {}'.format(decode(batch[0], src_vocab)))
         result = next(estimator.predict(input_fn=lambda: {'input': batch, 'output': batch}))
-        print("RESULT")
-        # result = np.argmax(result, axis=1)
-        print(result)
-        # print('Prediction: {}'.format(decode(result, dst_vocab)))
-        for i in result.T:
-            print('Prediction: {}'.format(decode(i, dst_vocab)))
+        # print("RESULT")
+        result = np.argmax(result, axis=1)
+        # print(result)
+        print('Prediction: {}'.format(decode(result, dst_vocab)))
+        # for i in result.T:
+        #     print('Prediction: {}'.format(decode(i, dst_vocab)))
 
 if __name__ == '__main__':
     data_generator = DataGenerator('vocab/vocab_subtitles_40000.pl', 'data/input_subtitles_validation.pl', 'vocab/vocab_subtitles_40000.en', 'data/input_subtitles_validation.en')
@@ -298,9 +296,9 @@ if __name__ == '__main__':
         ['predictions', 'train_pred'], every_n_iter=100,
         formatter=get_formatter(['predictions', 'train_pred'], data_generator.dst_vocab, data_generator.dst_vocab))
     # train
-    #est.train(
-    #    input_fn=input_fn,
-    #    hooks=[tf.train.FeedFnHook(feed_fn), print_inputs, print_predictions])
+    est.train(
+       input_fn=input_fn,
+       hooks=[tf.train.FeedFnHook(feed_fn), print_inputs, print_predictions])
     # predict
     #est.predict(input_fn=predict_input_fn())
     #predict_test(est, data_generator, data_generator.src_vocab, data_generator.dst_vocab)
