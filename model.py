@@ -33,7 +33,8 @@ class TranslatorModel:
                                                     'src_vocab_size': self.src_vocab_size,
                                                     'dst_vocab_size': self.dst_vocab_size,
                                                     'start_token': START_TOKEN,
-                                                    'end_token': END_TOKEN
+                                                    'end_token': END_TOKEN,
+                                                    'beam_width' : args.beam_width
                                                 },
                                                 config=config)
 
@@ -47,7 +48,8 @@ class TranslatorModel:
         input_fn, init_hook = tf_prediction_dataset(sentences, self.args.src_vocab, 128,
                                                     self.padding, END_TOKEN, UNKNOWN_TOKEN)
         for source, translation in zip(sentences, self.estimator.predict(input_fn=input_fn, hooks=[init_hook])):
-            yield source, self.detokenizer.detokenize(decode_sentence(np.argmax(translation, axis=1)), return_str=True)
+            yield source, self.detokenizer.detokenize(decode_sentence(translation), # np.argmax(translation, axis=1)),
+                                                      return_str=True)
 
     def train(self, epochs, log_file='training.log'):
 
@@ -111,6 +113,7 @@ def bidirectional_gru_luong(mode, features, labels, params):
     max_length = params['max_length']
     start_token = params['start_token']
     end_token = params['end_token']
+    beam_width = params['beam_width']
 
     inp = features['input']
     output = features['output']
@@ -163,13 +166,48 @@ def bidirectional_gru_luong(mode, features, labels, params):
             )
             return outputs[0]
 
+    def beam_decode(scope, reuse=None):
+        with tf.variable_scope(scope, reuse=reuse):
+            tiled_encoder_outputs = tf.contrib.seq2seq.tile_batch(
+                encoder_output, multiplier=beam_width)
+            tiled_encoder_final_state = tf.contrib.seq2seq.tile_batch(
+                encoder_final_state, multiplier=beam_width)
+            tiled_sequence_length = tf.contrib.seq2seq.tile_batch(
+                lengths, multiplier=beam_width)
+
+            attention_mechanism = tf.contrib.seq2seq.LuongAttention(
+                num_units=num_units, memory=tiled_encoder_outputs, memory_sequence_length=tiled_sequence_length)
+            cell = tf.contrib.rnn.LSTMCell(num_units=num_units)
+            attn_cell = tf.contrib.seq2seq.AttentionWrapper(
+                cell, attention_mechanism, attention_layer_size=num_units)
+            out_cell = tf.contrib.rnn.OutputProjectionWrapper(
+                attn_cell, dst_vocab_size, reuse=reuse
+            )
+
+            decoder_initial_state = attn_cell.zero_state(
+                dtype=tf.float32, batch_size=batch_size * beam_width)
+            decoder_initial_state = decoder_initial_state.clone(
+                cell_state=tiled_encoder_final_state)
+            # Tu mozna dodac kare za dlugosc zdania
+            decoder = tf.contrib.seq2seq.BeamSearchDecoder(cell=out_cell, embedding=embeddings,
+                                                           start_tokens=tf.to_int32(start_tokens), end_token=end_token,
+                                                           initial_state=decoder_initial_state,
+                                                           beam_width=beam_width)
+            outputs, state, lens = tf.contrib.seq2seq.dynamic_decode(
+                decoder=decoder, output_time_major=False,
+                impute_finished=False, maximum_iterations=max_length
+            )
+            return outputs
+
     train_outputs = decode(train_helper, 'decode')
-    pred_outputs = decode(pred_helper, 'decode', reuse=True)
+    # pred_outputs = decode(pred_helper, 'decode', reuse=True)
+    pred_outputs = beam_decode('decode', reuse=True)
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         return tf.estimator.EstimatorSpec(
             mode=mode,
-            predictions=pred_outputs.rnn_output
+            # predictions = pred_outputs.rnn_output
+            predictions=pred_outputs.predicted_ids
         )
 
     weights = tf.to_float(tf.not_equal(train_output[:, :-1], end_token))

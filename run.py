@@ -30,6 +30,7 @@ def parse_arguments():
     parser.add_argument('--embedding-size', type=int, default=300, help='embedding size')
     parser.add_argument('--max-sentence-length', type=int, default=39, help='max sentence length')
     parser.add_argument('--batch-size', type=int, default=128, help='batch size')
+    parser.add_argument('--beam-width', type=int, default=15, help='decoder beam width')
 
     args = parser.parse_args()
 
