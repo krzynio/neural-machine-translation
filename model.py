@@ -179,7 +179,7 @@ def bidirectional_gru_luong(mode, features, labels, params):
                 num_units=num_units, memory=tiled_encoder_outputs, memory_sequence_length=tiled_sequence_length)
             cell = tf.contrib.rnn.LSTMCell(num_units=num_units)
             attn_cell = tf.contrib.seq2seq.AttentionWrapper(
-                cell, attention_mechanism, attention_layer_size=num_units)
+                cell, attention_mechanism, attention_layer_size=num_units/2)
             out_cell = tf.contrib.rnn.OutputProjectionWrapper(
                 attn_cell, dst_vocab_size, reuse=reuse
             )
