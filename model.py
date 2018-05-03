@@ -142,6 +142,7 @@ def bidirectional_gru_luong(mode, features, labels, params):
         dtype=tf.float32
     )
     encoder_output = tf.concat(encoder_output, axis=2)
+    encoder_final_state = tf.concat(encoder_final_state, axis=1)
     train_helper = tf.contrib.seq2seq.TrainingHelper(output_embed, sequence_length=lengths)
     pred_helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(embeddings, start_tokens=tf.to_int32(start_tokens),
                                                            end_token=end_token)
