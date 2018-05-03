@@ -4,7 +4,7 @@ import pandas as pd
 import tensorflow as tf
 import tensorflow.contrib.layers as layers
 from nltk.tokenize.moses import MosesDetokenizer
-
+from utils import limit
 from bleu import compute_bleu
 from data import tf_prediction_dataset, tf_train_dataset
 from utils import load_vocab
@@ -43,8 +43,8 @@ class TranslatorModel:
         with open(src_file) as f:
             for src in f:
                 source.append(src)
-        references = map(lambda x: [x.split(' ')], open(dst_file))
-        translations = filter(lambda x: x[1], self.translate(source))
+        references = limit(map(lambda x: [x.split(' ')], open(dst_file)), 10000)
+        translations = limit(filter(lambda x: x[1], self.translate(source)), 10000)
         return compute_bleu(references, translations)
 
     def translate(self, sentences, return_tokens=False):
