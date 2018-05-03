@@ -3,6 +3,7 @@ import re
 
 import numpy as np
 import unidecode
+from nltk import word_tokenize
 
 
 def load_vocab(path):
@@ -51,32 +52,31 @@ def create_vocab(data_file,
             f.write(w + '\n')
 
 
+def light_prepare(sentence):
+    def remove_diacritics(s):
+        return unidecode.unidecode(s)
+
+    sentence = remove_diacritics(sentence)
+    return word_tokenize(sentence)
+
+
 def create_prepared_data(src_sentences_file,
                          dst_sentences_file,
                          prepared_src_file,
-                         prepared_dst_file,
-                         size=50000,
-                         min_length=3,
-                         max_length=30):
+                         prepared_dst_file):
+    current = 0
     with open(src_sentences_file) as source_file:
         with open(dst_sentences_file) as dst_file:
             with open(prepared_src_file, 'w') as output_src_file:
                 with open(prepared_dst_file, 'w') as output_dst_file:
-                    total = 0
-                    while total < size:
-                        source_sentence = next(source_file)
-                        dst_sentence = next(dst_file)
-
-                        source_sentence = prepare_sentence(source_sentence)
-                        dst_sentence = prepare_sentence(dst_sentence)
-                        src_len = len(source_sentence.split(' '))
-                        dst_len = len(dst_sentence.split(' '))
-
-                        if src_len > max_length or src_len < min_length or dst_len > max_length or dst_len < min_length:
-                            continue
-                        total += 1
+                    for src, dst in zip(source_file, dst_file):
+                        source_sentence = ' '.join(light_prepare(src))
+                        dst_sentence = ' '.join(light_prepare(dst))
                         output_src_file.write(source_sentence + '\n')
                         output_dst_file.write(dst_sentence + '\n')
+                        current += 1
+                        if current % 1000 == 0:
+                            print(current)
 
 
 def read_lines(file):
@@ -94,7 +94,7 @@ def shuffle_files(src_data_in, dst_data_in, src_data_out, dst_data_out):
     src_lines = read_lines(src_data_in)
     dst_lines = read_lines(dst_data_in)
 
-    if len(src_lines) != dst_lines:
+    if len(src_lines) != len(dst_lines):
         raise Exception('src line count {} != dst line count {}'.format(len(src_lines), len(dst_lines)))
     count = len(src_lines)
     permutation = list(np.random.permutation(count))
@@ -102,10 +102,26 @@ def shuffle_files(src_data_in, dst_data_in, src_data_out, dst_data_out):
     write_lines(dst_data_out, dst_lines, permutation)
 
 
+def take_first_n_lines(src_in, dst_in, src_out, dst_out, n=5000000, max_length=39):
+    with open(src_in) as f1_in:
+        with open(dst_in) as f2_in:
+            with open(src_out, 'w') as f1_out:
+                with open(dst_out, 'w') as f2_out:
+                    total = 0
+                    while total < n:
+                        s = next(f1_in).replace('\n', '').split(' ')
+                        t = next(f2_in).replace('\n', '').split(' ')
+                        if len(s) > max_length or len(t) > max_length:
+                            continue
+                        f1_out.write(' '.join(s) + '\n')
+                        f2_out.write(' '.join(t) + '\n')
+                        total += 1
+
+
 if __name__ == '__main__':
-    # create_vocab('files/data_shuffled.en', 'files/vocab.en', 50000)
-    create_vocab('files/data_shuffled.pl', 'files/vocab.pl', 70000)
-    # shuffle_files('files/data.pl', 'files/data.en', 'files/data_shuffled.pl', 'files/data_shuffled.en')
+    create_vocab('files/data5m_shuffled.en', 'files/vocab5m.en', 100000)
+    create_vocab('files/data5m_shuffled.pl', 'files/vocab5m.pl', 200000)
+    #shuffle_files('files/data5m.pl', 'files/data5m.en', 'files/data5m_shuffled.pl', 'files/data5m_shuffled.en')
     # count_pl = 0
     # count_en = 0
     # with open('files/data.pl', 'r') as f:
@@ -118,12 +134,18 @@ if __name__ == '__main__':
     #             count_en += 1
     # print(count_pl, count_en)
 
+    # take_first_n_lines('files/non_processed_data.pl',
+    #                    'files/non_processed_data.en',
+    #                    'files/data5m.pl',
+    #                    'files/data5m.en',
+    #                    5000000,
+    #                    39)
     # create_prepared_data(
     #     'files/raw_data.pl',
     #     'files/raw_data.en',
-    #     'files/data.pl',
-    #     'files/data.en',
-    #     size=5000000,
-    #     min_length=1,
-    #     max_length=30
+    #     'files/non_processed_data.pl',
+    #     'files/non_processed_data.en',
+    #     # size=5000000,
+    #     # min_length=1,
+    #     # max_length=30
     # )
