@@ -3,7 +3,7 @@ import re
 
 import numpy as np
 import unidecode
-
+from nltk import word_tokenize
 
 def load_vocab(path):
     with open(path) as f:
@@ -26,6 +26,13 @@ def prepare_sentence(sentence):
         return sentence.split(' ')
 
     return remove_repeating_spaces(remove_non_alphanumeric(remove_diacritics(sentence))).strip().lower()
+
+def light_prepare(sentence):
+    def remove_diacritics(s):
+        return unidecode.unidecode(s)
+
+    sentence = remove_diacritics(sentence)
+    return word_tokenize(sentence)
 
 
 def create_vocab(data_file,

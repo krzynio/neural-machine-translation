@@ -6,6 +6,7 @@ import tensorflow.contrib.layers as layers
 
 from data import tf_prediction_dataset, tf_train_dataset
 from utils import load_vocab
+from nltk.tokenize.moses import MosesDetokenizer
 
 UNKNOWN_TOKEN = 2
 START_TOKEN = 1
@@ -21,6 +22,7 @@ class TranslatorModel:
         self.src_vocab_size = len(self.src_vocab_encode)
         self.dst_vocab_size = len(self.dst_vocab_encode)
         self.args = args
+        self.detokenizer = MosesDetokenizer()
         self.padding = self.args.max_sentence_length + 1
         self.estimator = tf.estimator.Estimator(model_fn=bidirectional_gru_luong,
                                                 model_dir=args.model_dir,
@@ -45,7 +47,7 @@ class TranslatorModel:
         input_fn, init_hook = tf_prediction_dataset(sentences, self.args.src_vocab, 128,
                                                     self.padding, END_TOKEN, UNKNOWN_TOKEN)
         for source, translation in zip(sentences, self.estimator.predict(input_fn=input_fn, hooks=[init_hook])):
-            yield source, ' '.join(decode_sentence(np.argmax(translation, axis=1)))
+            yield source, self.detokenizer.detokenize(decode_sentence(np.argmax(translation, axis=1)), return_str=True)
 
     def train(self, epochs, log_file='training.log'):
 
@@ -89,7 +91,7 @@ class TranslatorModel:
 
             with open(log_file, 'a') as file:
                 file.write('Epoch {}: validation loss = {}\n'.format(epoch, loss))
-                to_test = test_data.sample(1)
+                to_test = test_data.sample(100)
                 src_sentences = to_test[0].as_matrix().flatten()
                 dst_sentences = to_test[1].as_matrix().flatten()
                 for result, dst in zip(self.translate(src_sentences), dst_sentences):
@@ -128,8 +130,8 @@ def bidirectional_gru_luong(mode, features, labels, params):
     with tf.variable_scope('embed_output', reuse=True):
         embeddings = tf.get_variable('embeddings')
 
-    fw_cell = tf.contrib.rnn.GRUCell(num_units=num_units)
-    bw_cell = tf.contrib.rnn.GRUCell(num_units=num_units)
+    fw_cell = tf.contrib.rnn.LSTMCell(num_units=num_units/2)
+    bw_cell = tf.contrib.rnn.LSTMCell(num_units=num_units/2)
     encoder_output, encoder_final_state = tf.nn.bidirectional_dynamic_rnn(
         fw_cell,
         bw_cell,
@@ -145,9 +147,9 @@ def bidirectional_gru_luong(mode, features, labels, params):
         with tf.variable_scope(scope, reuse=reuse):
             attention_mechanism = tf.contrib.seq2seq.LuongAttention(
                 num_units=num_units, memory=encoder_output, memory_sequence_length=lengths)
-            cell = tf.contrib.rnn.GRUCell(num_units=num_units)
+            cell = tf.contrib.rnn.LSTMCell(num_units=num_units)
             attn_cell = tf.contrib.seq2seq.AttentionWrapper(
-                cell, attention_mechanism, attention_layer_size=num_units)
+                cell, attention_mechanism, attention_layer_size=num_units/2)
             out_cell = tf.contrib.rnn.OutputProjectionWrapper(
                 attn_cell, dst_vocab_size, reuse=reuse
             )
