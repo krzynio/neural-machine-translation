@@ -62,7 +62,7 @@ def main():
     translator = TranslatorModel(args, config)
     if args.mode == 'TRAIN':
         translator.train(10)
-    elif args.mode == 'BLUE':
+    elif args.mode == 'BLEU':
         print('BLEU = {}'.format(translator.calculate_bleu(args.src_validation_data, args.dst_validation_data)))
     else:
         try:
