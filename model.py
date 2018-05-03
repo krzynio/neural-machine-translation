@@ -171,8 +171,8 @@ def bidirectional_gru_luong(mode, features, labels, params):
         with tf.variable_scope(scope, reuse=reuse):
             tiled_encoder_outputs = tf.contrib.seq2seq.tile_batch(
                 encoder_output, multiplier=beam_width)
-            tiled_encoder_final_state = tf.contrib.seq2seq.tile_batch(
-                encoder_final_state, multiplier=beam_width)
+            #tiled_encoder_final_state = tf.contrib.seq2seq.tile_batch(
+            #    encoder_final_state, multiplier=beam_width)
             tiled_sequence_length = tf.contrib.seq2seq.tile_batch(
                 lengths, multiplier=beam_width)
 
@@ -187,8 +187,8 @@ def bidirectional_gru_luong(mode, features, labels, params):
 
             decoder_initial_state = attn_cell.zero_state(
                 dtype=tf.float32, batch_size=batch_size * beam_width)
-            decoder_initial_state = decoder_initial_state.clone(
-                cell_state=tiled_encoder_final_state)
+            #decoder_initial_state = decoder_initial_state.clone(
+            #    cell_state=tiled_encoder_final_state)
             # Tu mozna dodac kare za dlugosc zdania
             decoder = tf.contrib.seq2seq.BeamSearchDecoder(cell=out_cell, embedding=embeddings,
                                                            start_tokens=tf.to_int32(start_tokens), end_token=end_token,
