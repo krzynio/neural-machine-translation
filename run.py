@@ -63,7 +63,7 @@ def main():
     if args.mode == 'TRAIN':
         translator.train(10)
     elif args.mode == 'BLEU':
-        print('BLEU = {}'.format(translator.calculate_bleu(args.src_validation_data, args.dst_validation_data)))
+        print('BLEU score = {}'.format(translator.calculate_bleu(args.src_validation_data, args.dst_validation_data)[0]))
     else:
         try:
             while 1:

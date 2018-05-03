@@ -44,7 +44,7 @@ class TranslatorModel:
             for src in f:
                 source.append(src)
         references = limit(map(lambda x: [x.split(' ')], open(dst_file)), 10000)
-        translations = limit(filter(lambda x: x[1], self.translate(source)), 10000)
+        translations = limit(map(lambda x: x[1], self.translate(source, return_tokens=True)), 10000)
         return compute_bleu(references, translations)
 
     def translate(self, sentences, return_tokens=False):
@@ -57,8 +57,8 @@ class TranslatorModel:
         input_fn, init_hook = tf_prediction_dataset(sentences, self.args.src_vocab, 128,
                                                     self.padding, END_TOKEN, UNKNOWN_TOKEN)
         for source, translation in zip(sentences, self.estimator.predict(input_fn=input_fn, hooks=[init_hook])):
-            decoded = decode_sentence(np.argmax(translation, axis=1))
-            yield (source, self.detokenizer.detokenize(decoded, return_str=True) if not return_tokens else decoded)
+            decoded = list(decode_sentence(np.argmax(translation, axis=1)))
+            yield (source, (self.detokenizer.detokenize(decoded, return_str=True) if not return_tokens else decoded))
 
     def train(self, epochs, log_file='training.log'):
 
