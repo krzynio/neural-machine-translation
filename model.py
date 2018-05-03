@@ -143,7 +143,9 @@ def bidirectional_gru_luong(mode, features, labels, params):
         dtype=tf.float32
     )
     encoder_output = tf.concat(encoder_output, axis=2)
-    encoder_final_state = tf.concat(encoder_final_state, axis=1)
+    #encoder_final_state = tf.concat(encoder_final_state, axis=1)
+    encoder_final_state = tf.nn.rnn_cell.LSTMStateTuple(tf.concat([encoder_final_state[0].c, encoder_final_state[1].c], axis=1), tf.concat([encoder_final_state[1].h, encoder_final_state[1].h], axis=1))
+    
     train_helper = tf.contrib.seq2seq.TrainingHelper(output_embed, sequence_length=lengths)
     pred_helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(embeddings, start_tokens=tf.to_int32(start_tokens),
                                                            end_token=end_token)
@@ -172,8 +174,8 @@ def bidirectional_gru_luong(mode, features, labels, params):
         with tf.variable_scope(scope, reuse=reuse):
             tiled_encoder_outputs = tf.contrib.seq2seq.tile_batch(
                 encoder_output, multiplier=beam_width)
-            #tiled_encoder_final_state = tf.contrib.seq2seq.tile_batch(
-            #    encoder_final_state, multiplier=beam_width)
+            tiled_encoder_final_state = tf.contrib.seq2seq.tile_batch(
+                encoder_final_state, multiplier=beam_width)
             tiled_sequence_length = tf.contrib.seq2seq.tile_batch(
                 lengths, multiplier=beam_width)
 
@@ -188,8 +190,8 @@ def bidirectional_gru_luong(mode, features, labels, params):
 
             decoder_initial_state = attn_cell.zero_state(
                 dtype=tf.float32, batch_size=batch_size * beam_width)
-            #decoder_initial_state = decoder_initial_state.clone(
-            #    cell_state=tiled_encoder_final_state)
+            decoder_initial_state = decoder_initial_state.clone(
+                cell_state=tiled_encoder_final_state)
             # Tu mozna dodac kare za dlugosc zdania
             decoder = tf.contrib.seq2seq.BeamSearchDecoder(cell=out_cell, embedding=embeddings,
                                                            start_tokens=tf.to_int32(start_tokens), end_token=end_token,
