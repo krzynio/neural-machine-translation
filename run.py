@@ -6,7 +6,7 @@ import logging
 import tensorflow as tf
 
 from model import TranslatorModel
-from utils import prepare_sentence
+from utils import prepare_sentence, light_prepare
 
 
 def parse_arguments():
@@ -28,7 +28,7 @@ def parse_arguments():
 
     parser.add_argument('--cell-units', type=int, default=1024, help='number of cell units')
     parser.add_argument('--embedding-size', type=int, default=300, help='embedding size')
-    parser.add_argument('--max-sentence-length', type=int, default=35, help='max sentence length')
+    parser.add_argument('--max-sentence-length', type=int, default=39, help='max sentence length')
     parser.add_argument('--batch-size', type=int, default=128, help='batch size')
 
     args = parser.parse_args()
@@ -46,7 +46,7 @@ def parse_arguments():
 
 
 def main():
-    tf.logging._logger.setLevel(logging.INFO)
+    #tf.logging._logger.setLevel(logging.INFO)
     config = tf.estimator.RunConfig(
         save_summary_steps=100,
         session_config=None,
@@ -59,10 +59,13 @@ def main():
     if args.mode == 'TRAIN':
         translator.train(10)
     else:
-        while 1:
-            sentence = prepare_sentence(input('>> '))
-            for src, translation in translator.translate([sentence]):
-                print(translation)
+        try:
+            while 1:
+                sentence = ' '.join(light_prepare(input('>> ')))
+                for src, translation in translator.translate([sentence]):
+                    print(translation)
+        except:
+            pass
 
 
 if __name__ == '__main__':
