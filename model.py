@@ -40,15 +40,12 @@ class TranslatorModel:
 
     def calculate_bleu(self, src_file, dst_file):
         source = []
-        target = []
-        with open(src_file) as f_in:
-            with open(dst_file) as f_out:
-                for src, dst in zip(f_in, f_out):
-                    target.append([dst.split(' ')])
-                    source.append(src)
-
+        with open(src_file) as f:
+            for src in f:
+                source.append(src)
+        references = map(lambda x: [x.split(' ')], open(dst_file))
         translations = filter(lambda x: x[1], self.translate(source))
-        return compute_bleu(translations, target)
+        return compute_bleu(references, translations)
 
     def translate(self, sentences, return_tokens=False):
         def decode_sentence(tokens):
