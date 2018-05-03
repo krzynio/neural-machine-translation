@@ -40,7 +40,8 @@ class TranslatorModel:
 
     def translate(self, sentences):
         def decode_sentence(tokens):
-            for t in tokens:
+            tokens = np.transpose(tokens)
+            for t in tokens[0]:
                 if t == END_TOKEN:
                     return
                 yield self.dst_vocab_decode[t]

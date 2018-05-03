@@ -60,13 +60,14 @@ def main():
     if args.mode == 'TRAIN':
         translator.train(10)
     else:
-        try:
-            while 1:
-                sentence = ' '.join(light_prepare(input('>> ')))
-                for src, translation in translator.translate([sentence]):
-                    print(translation)
-        except:
-            pass
+        #try:
+        while 1:
+            sentence = ' '.join(light_prepare(input('>> ')))
+            for src, translation in translator.translate([sentence]):
+                print(translation)
+        #except Exception as e:
+        #    print(e)
+        #    pass
 
 
 if __name__ == '__main__':
