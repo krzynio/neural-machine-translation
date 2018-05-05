@@ -131,11 +131,12 @@ def cnn_seq2seq(mode, features, labels, params):
 
     batch_size = tf.shape(inp)[0]
 
-    input_embed = tf.get_variable(name="emb", shape=[src_vocab_size, embed_dim], initializer=tf.random_normal_initializer(mean=0.0,stddev=0.1))
+    input_embed = tf.get_variable(name="inp_emb", shape=[src_vocab_size, embed_dim], initializer=tf.random_normal_initializer(mean=0.0,stddev=0.1))
 
-    input_pos_embed = tf.get_variable(name="pos", shape=[pos_embed_count, embed_dim], initializer=tf.random_normal_initializer(mean=0.0,stddev=0.1))
+    input_pos_embed = tf.get_variable(name="inp_pos", shape=[pos_embed_count, embed_dim], initializer=tf.random_normal_initializer(mean=0.0,stddev=0.1))
+    output_pos_embed = tf.get_variable(name="inp_pos", shape=[pos_embed_count, embed_dim], initializer=tf.random_normal_initializer(mean=0.0,stddev=0.1))
 
-    output_embed = tf.get_variable(name="emb", shape=[dst_vocab_size, embed_dim], initializer=tf.random_normal_initializer(mean=0.0,stddev=0.1))
+    output_embed = tf.get_variable(name="out_emb", shape=[dst_vocab_size, embed_dim], initializer=tf.random_normal_initializer(mean=0.0,stddev=0.1))
 
     # output_embed = layers.embed_sequence(
     #     train_output, vocab_size=dst_vocab_size, scope='embed_output', embed_dim=embed_dim)
@@ -217,6 +218,57 @@ def cnn_seq2seq(mode, features, labels, params):
             layers.fully_connected(next_layer, embed_dim, activation_fn=None)
         #add output to input embedding for attention
         return next_layer, (next_layer + positional_embeddings) * tf.sqrt(0.5)
+
+    def attention(inputs, target_embeddings, encoder_outputs):
+        residual = inputs
+        #attention
+        inputs = linear_mapping_weightnorm(inputs, embed_dim, var_scope_name="mapping_before_attention")
+        inputs = (inputs + target_embeddings) * tf.sqrt(0.5)
+        inputs = tf.matmul(inputs, encoder_outputs[0])
+        inputs = tf.nn.softmax(inputs)
+        attention_scores = inputs
+
+        inputs = tf.matmul(inputs, encoder_outputs[1])
+        scale = encoder_outputs[1].shape[1]
+        inputs = inputs * (scale * tf.sqrt(1.0 / scale))
+
+        inputs = linear_mapping_weightnorm(inputs, conv_size, var_scope_name="mapping_after_attention")
+        inputs = (inputs + residual) * tf.sqrt(0.5)
+        return inputs, attention_scores
+    
+    def split_and_transpose(encoder_outputs):
+        encoder_a, encoder_b = encoder_outputs
+        encoder_a = tf.transpose(encoder_a, perm=[1,2])
+        return encoder_a, encoder_b
+
+
+    def decode(encoder_outputs, previous_output_tokens, sequence_length, labels):
+        encoder_a, encoder_b = split_and_transpose(encoder_outputs)
+        next_layer = tf.nn.embedding_lookup(output_embed, previous_output_tokens)
+        next_layer += get_positional_embedding(sequence_length, tf.shape(labels)[1], output_pos_embed)
+        final_embeddings = next_layer
+
+        # average_attention_scores = None
+        with tf.variable_scope("decoder_cnn"):
+            #Project to size of convolution
+            next_layer = linear_mapping_weightnorm(next_layer, conv_size, var_scope_name="decoder_begin")
+            for i in range(cnn_layers):
+                residual = next_layer
+                next_layer = conv1d_weightnorm(next_layer, i, 2 * conv_size, kernel_size)
+                next_layer = gated_linear_units(next_layer)
+                #attention
+                next_layer, attention_scores = attention(next_layer, final_embeddings, (encoder_a, encoder_b))
+                #residual
+                next_layer = (next_layer + residual) * tf.sqrt(0.5)
+            #Project back to size of vocabulary
+            next_layer = linear_mapping_weightnorm(next_layer, embed_dim)
+            next_layer = linear_mapping_weightnorm(next_layer, dst_vocab_size)
+
+            return next_layer
+
+
+
+
 
 
 
