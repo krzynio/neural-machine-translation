@@ -11,4 +11,5 @@
     --dst-predict-data files/valid.en \
     --model-dir luong-gru-lstm-unprocessed \
     --mode TRAIN \
-    --max-sentence-length 39
+    --max-sentence-length 39 \
+    --batch-size 1
