@@ -6,7 +6,7 @@ import tensorflow.contrib.layers as layers
 
 from data import tf_prediction_dataset, tf_train_dataset
 from utils import load_vocab
-from nltk.tokenize.moses import MosesDetokenizer
+from sacremoses import MosesDetokenizer
 
 UNKNOWN_TOKEN = 2
 START_TOKEN = 1
