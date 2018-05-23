@@ -12,6 +12,9 @@ def load_vocab(path):
             map(lambda x: (x[0], x[1]), enumerate(words)))
 
 
+def limit(generator, count):
+    return map(lambda x: x[1], filter(lambda x: x[0] < count, enumerate(generator)))
+
 def prepare_sentence(sentence):
     def remove_repeating_spaces(sentence):
         return re.sub('[ ]{2,}', ' ', sentence)
