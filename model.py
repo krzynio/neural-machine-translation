@@ -43,8 +43,8 @@ class TranslatorModel:
         with open(src_file) as f:
             for src in f:
                 source.append(src)
-        references = limit(map(lambda x: [x.split(' ')], open(dst_file)), 10000)
-        translations = limit(map(lambda x: x[1], self.translate(source, return_tokens=True)), 10000)
+        references = map(lambda x: [x.split(' ')], open(dst_file))
+        translations = map(lambda x: x[1], self.translate(source, return_tokens=True))
         return compute_bleu(references, translations)
 
     def translate(self, sentences, return_tokens=False):
