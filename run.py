@@ -30,6 +30,7 @@ def parse_arguments():
     parser.add_argument('--embedding-size', type=int, default=300, help='embedding size')
     parser.add_argument('--max-sentence-length', type=int, default=39, help='max sentence length')
     parser.add_argument('--batch-size', type=int, default=128, help='batch size')
+    parser.add_argument('--beam-width', type=int, default=15, help='decoder beam width')
 
     args = parser.parse_args()
 
@@ -65,13 +66,14 @@ def main():
     elif args.mode == 'BLEU':
         print('BLEU = {}'.format(translator.calculate_bleu(args.src_validation_data, args.dst_validation_data)))
     else:
-        try:
-            while 1:
-                sentence = ' '.join(light_prepare(input('>> ')))
-                for src, translation in translator.translate([sentence]):
-                    print(translation)
-        except:
-            pass
+        #try:
+        while 1:
+            sentence = ' '.join(light_prepare(input('>> ')))
+            for src, translation in translator.translate([sentence]):
+                print(translation)
+        #except Exception as e:
+        #    print(e)
+        #    pass
 
 
 if __name__ == '__main__':
