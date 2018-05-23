@@ -30,6 +30,7 @@ def parse_arguments():
     parser.add_argument('--embedding-size', type=int, default=300, help='embedding size')
     parser.add_argument('--max-sentence-length', type=int, default=39, help='max sentence length')
     parser.add_argument('--batch-size', type=int, default=128, help='batch size')
+    parser.add_argument('--beam-width', type=int, default=None, help='decoder beam width (disabled by default)')
 
     args = parser.parse_args()
 
@@ -70,7 +71,8 @@ def main():
                 sentence = ' '.join(light_prepare(input('>> ')))
                 for src, translation in translator.translate([sentence]):
                     print(translation)
-        except:
+        except Exception as e:
+            print(e)
             pass
 
 
