@@ -5,5 +5,5 @@
     --dst-vocab files/vocab.en \
     --model-dir luong-gru-lstm-unprocessed \
     --mode BLEU \
-    --src-validation-data files/test.pl --dst-validation-data files/test.en \
+    --src-validation-data $1 --dst-validation-data $2 \
     --max-sentence-length 39

@@ -45,8 +45,8 @@ class TranslatorModel:
         with open(src_file) as f:
             for src in f:
                 source.append(src)
-        references = map(lambda x: [x.split(' ')], open(dst_file))
-        translations = filter(lambda x: x[1], self.translate(source))
+        references = limit(map(lambda x: [x.split(' ')], open(dst_file)), 20000)
+        translations = limit(self.translate(source, return_tokens=True), 20000)
         return compute_bleu(references, translations)
 
     def translate(self, sentences, return_tokens=False):
@@ -61,11 +61,16 @@ class TranslatorModel:
         input_fn, init_hook = tf_prediction_dataset(sentences, self.args.src_vocab, 128,
                                                     self.padding, END_TOKEN, UNKNOWN_TOKEN)
         for source, translation in zip(sentences, self.estimator.predict(input_fn=input_fn, hooks=[init_hook])):
-            if self.beam_width is not None:
-                yield source, self.detokenizer.detokenize(decode_sentence(translation), return_str=True)
+            decoded = list(decode_sentence(translation if self.beam_width is not None else np.argmax(translation, axis=1)))
+            if return_tokens:
+                yield decoded
             else:
-                decoded = decode_sentence(np.argmax(translation, axis=1))
-                yield (source, self.detokenizer.detokenize(decoded, return_str=True) if not return_tokens else decoded)
+                yield (source, self.detokenizer.detokenize(decoded, return_str=True)) 
+            #if self.beam_width is not None:
+            #    yield source, self.detokenizer.detokenize(decode_sentence(translation), return_str=True)
+            #else:
+            #    decoded = decode_sentence(np.argmax(translation, axis=1))
+            #    yield (source, self.detokenizer.detokenize(decoded, return_str=True) if not return_tokens else decoded)
 
     def train(self, epochs, log_file='training.log'):
 
