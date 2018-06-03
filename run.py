@@ -46,7 +46,8 @@ def parse_arguments():
     if args.mode == 'BLEU':
         if args.src_validation_data is None or args.dst_validation_data is None:
             parser.error('src-validation-data and dst-validation-data are required when mode = BLEU')
-
+    if args.beam_width == 0:
+        args.beam_width = None
     return args
 
 
