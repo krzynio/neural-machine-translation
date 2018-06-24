@@ -91,8 +91,9 @@ class TranslatorModel:
         test_data = load_test_data()
 
         for epoch in range(epochs):
-            train_input_fn, train_init_hook = tf_multilang_dataset(
+            train_input_fn, train_init_hook = tf_train_dataset(
                 self.args.src_train_data,
+                self.args.vocab,
                 self.args.dst_train_data,
                 self.args.vocab,
                 batch_size=self.args.batch_size,
@@ -101,8 +102,9 @@ class TranslatorModel:
                 end_token=END_TOKEN,
                 unknown_token=UNKNOWN_TOKEN)
 
-            eval_input_fn, eval_init_hook = tf_multilang_dataset(
+            eval_input_fn, eval_init_hook = tf_train_dataset(
                 self.args.src_validation_data,
+                self.args.vocab,
                 self.args.dst_validation_data,
                 self.args.vocab,
                 batch_size=self.args.batch_size,
