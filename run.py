@@ -11,8 +11,8 @@ from utils import prepare_sentence, light_prepare
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Neural machine translation')
-    parser.add_argument('--src-vocab', type=str, help='location of src vocabulary', required=True)
-    parser.add_argument('--dst-vocab', type=str, help='location of dst vocabulary', required=True)
+    parser.add_argument('--vocab', type=str, help='location of src vocabulary', required=True)
+    # parser.add_argument('--dst-vocab', type=str, help='location of dst vocabulary', required=True)
 
     parser.add_argument('--model-dir', type=str, help='location of the model', required=True)
     parser.add_argument('--mode', type=str, help='program mode', default='TRAIN', choices=['TRAIN', 'REPL', 'BLEU'])
