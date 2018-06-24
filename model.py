@@ -1,135 +1,93 @@
 #!/usr/bin/env python3
+import logging
+
+from bleu import compute_bleu
 import numpy as np
-import pandas as pd
 import tensorflow as tf
 import tensorflow.contrib.layers as layers
-from utils import limit
-from bleu import compute_bleu
-from data import tf_prediction_dataset, tf_train_dataset
-from utils import load_vocab
 from sacremoses import MosesDetokenizer
 
-UNKNOWN_TOKEN = 2
-START_TOKEN = 1
-END_TOKEN = 0
+from dataset import make_input_fn, Vocabulary
 
 
 class TranslatorModel:
 
     def __init__(self, args, config):
         self.config = config
-        self.src_vocab_encode, self.src_vocab_decode = load_vocab(args.src_vocab)
-        self.dst_vocab_encode, self.dst_vocab_decode = load_vocab(args.dst_vocab)
-        self.src_vocab_size = len(self.src_vocab_encode)
-        self.dst_vocab_size = len(self.dst_vocab_encode)
+        self.vocab = Vocabulary(args.vocab)
         self.args = args
         self.detokenizer = MosesDetokenizer()
-        self.padding = self.args.max_sentence_length + 1
+        self.max_len = self.args.max_sentence_length
         self.beam_width = args.beam_width
+        self.logger = logging.getLogger('nmt.model')
         self.estimator = tf.estimator.Estimator(model_fn=bidirectional_gru_luong,
                                                 model_dir=args.model_dir,
                                                 params={
                                                     'embed_dim': args.embedding_size,
                                                     'num_units': args.cell_units,
-                                                    'max_length': self.padding,
-                                                    'src_vocab_size': self.src_vocab_size,
-                                                    'dst_vocab_size': self.dst_vocab_size,
-                                                    'start_token': START_TOKEN,
-                                                    'end_token': END_TOKEN,
+                                                    'max_length': self.max_len + 1,
+                                                    'vocab_size': self.vocab.size,
+                                                    'start_token': Vocabulary.START_TOKEN,
+                                                    'end_token': Vocabulary.END_TOKEN,
                                                     'beam_width': args.beam_width
                                                 },
                                                 config=config)
 
-    def calculate_bleu(self, src_file, dst_file):
-        source = []
-        with open(src_file) as f:
-            for src in f:
-                source.append(src)
-        print(len(source))
-        references = limit(map(lambda x: [x.split(' ')], open(dst_file)), 20000)
-        translations = limit(self.translate(source, return_tokens=True), 20000)
-        return compute_bleu(references, translations)
-
-    def translate(self, sentences, return_tokens=False):
-        def decode_sentence(tokens):
-            if self.beam_width is not None:
-                tokens = np.transpose(tokens)[0]
-            for t in tokens:
-                if t == END_TOKEN:
-                    return
-                yield self.dst_vocab_decode[t]
-
-        input_fn, init_hook = tf_prediction_dataset(sentences, self.args.src_vocab, 128,
-                                                    self.padding, END_TOKEN, UNKNOWN_TOKEN)
-        for source, translation in zip(sentences, self.estimator.predict(input_fn=input_fn, hooks=[init_hook])):
-            decoded = list(decode_sentence(translation if self.beam_width is not None else np.argmax(translation, axis=1)))
-            if return_tokens:
-                yield decoded
-            else:
-                yield (source, self.detokenizer.detokenize(decoded, return_str=True)) 
-            #if self.beam_width is not None:
-            #    yield source, self.detokenizer.detokenize(decode_sentence(translation), return_str=True)
-            #else:
-            #    decoded = decode_sentence(np.argmax(translation, axis=1))
-            #    yield (source, self.detokenizer.detokenize(decoded, return_str=True) if not return_tokens else decoded)
-
-    def train(self, epochs, log_file='training.log'):
-
-        def load_test_data():
-            with open(self.args.src_predict_data) as src_f:
-                with open(self.args.dst_predict_data) as dst_f:
-                    src_sentences = np.array(src_f.read().split('\n')[:-1])
-                    dst_sentences = np.array(dst_f.read().split('\n')[:-1])
-                    print(src_sentences)
-                    print(dst_sentences)
-                    return pd.DataFrame([src_sentences, dst_sentences]).T
-
-        test_data = load_test_data()
-
+    def train(self, train_dataset, epochs=1, batch_size=128, validation_dataset=None, predict_samples=20):
+        self.logger.info('Began training')
         for epoch in range(epochs):
-            train_input_fn, train_init_hook = tf_train_dataset(
-                self.args.src_train_data,
-                self.args.src_vocab,
-                self.args.dst_train_data,
-                self.args.dst_vocab,
-                batch_size=self.args.batch_size,
-                epochs=1,
-                padding=self.padding,
-                end_token=END_TOKEN,
-                unknown_token=UNKNOWN_TOKEN)
+            self.logger.info('Starting epoch {}'.format(epoch))
+            input_fn, hooks = self.__prepare_input(train_dataset.new_generator(batch_size=batch_size,
+                                                                               max_length=self.max_len))
+            self.estimator.train(input_fn=input_fn, hooks=hooks)
+            self.logger.info('Epoch {} finished'.format(epoch))
 
-            eval_input_fn, eval_init_hook = tf_train_dataset(
-                self.args.src_validation_data,
-                self.args.src_vocab,
-                self.args.dst_validation_data,
-                self.args.dst_vocab,
-                batch_size=self.args.batch_size,
-                epochs=1,
-                padding=self.padding,
-                end_token=END_TOKEN,
-                unknown_token=UNKNOWN_TOKEN)
+            if validation_dataset is not None:
+                self.logger.info('Evaluating validation set')
+                validation_loss = self.__evaluate(validation_dataset, batch_size=batch_size)
+                self.logger.info('Validation loss: {}'.format(validation_loss))
 
-            self.estimator.train(input_fn=train_input_fn, hooks=[train_init_hook])
+            if predict_samples is not None:
+                generator, src, dst = validation_dataset.new_generator(batch_size=batch_size,
+                                                                       max_length=self.max_len,
+                                                                       limit=predict_samples,
+                                                                       return_raw=True)
+                for s, d, t in zip(src, dst, self.translate(generator)):
+                    print(t)
+                    self.logger.info('SRC: {}'.format(s))
+                    self.logger.info('DST: {}'.format(d))
+                    self.logger.info('TRANSLATION: {}'.format(t))
+                    self.logger.info('---')
 
-            loss = self.estimator.evaluate(input_fn=eval_input_fn, hooks=[eval_init_hook])
+    def translate(self, generator, return_tokens=False):
+        input_fn, hooks = self.__prepare_input(generator)
+        for translation in self.estimator.predict(input_fn=input_fn, hooks=hooks):
+            token_idx = np.transpose(translation)[0] if self.beam_width is not None else np.argmax(translation, axis=1)
+            tokens = self.vocab.decode_sentence(token_idx, return_tokens=True)
+            if return_tokens:
+                yield tokens
+            else:
+                yield self.detokenizer.detokenize(tokens)
 
-            with open(log_file, 'a') as file:
-                file.write('Epoch {}: validation loss = {}\n'.format(epoch, loss))
-                to_test = test_data.sample(100)
-                src_sentences = to_test[0].as_matrix().flatten()
-                dst_sentences = to_test[1].as_matrix().flatten()
-                for result, dst in zip(self.translate(src_sentences), dst_sentences):
-                    src, translated = result
-                    file.write('Input: {}\n'.format(src))
-                    file.write('Translation: {}\n'.format(translated))
-                    file.write('Target: {}\n'.format(dst))
-                    file.write('------\n')
-                file.write('\n')
+    def __evaluate(self, validation_ds, batch_size):
+        generator = validation_ds.new_generator(batch_size=batch_size,
+                                                max_length=self.max_len)
+        input_fn, hooks = self.__prepare_input(generator)
+        return self.estimator.evaluate(input_fn=input_fn,
+                                       hooks=hooks)
+
+    def __prepare_input(self, generator):
+        input_fn, feed_fn = make_input_fn(generator)
+        hooks = [tf.train.FeedFnHook(feed_fn)]
+        return input_fn, hooks
+
+    def calculate_bleu(self, generator, references):
+        translations = self.translate(generator, return_tokens=True)
+        return compute_bleu(references, translations)
 
 
 def bidirectional_gru_luong(mode, features, labels, params):
-    src_vocab_size = params['src_vocab_size']
-    dst_vocab_size = params['dst_vocab_size']
+    vocab_size = params['vocab_size']
     embed_dim = params['embed_dim']
     num_units = params['num_units']
     max_length = params['max_length']
@@ -147,12 +105,12 @@ def bidirectional_gru_luong(mode, features, labels, params):
     lengths = tf.to_int32(tf.fill([batch_size], max_length))
 
     input_embed = layers.embed_sequence(
-        inp, vocab_size=src_vocab_size, scope='embed_input', embed_dim=embed_dim)
+        inp, vocab_size=vocab_size, scope='embedding_layer', embed_dim=embed_dim)
 
     output_embed = layers.embed_sequence(
-        train_output, vocab_size=dst_vocab_size, scope='embed_output', embed_dim=embed_dim)
+        train_output, vocab_size=vocab_size, scope='embedding_layer', embed_dim=embed_dim, reuse=True)
 
-    with tf.variable_scope('embed_output', reuse=True):
+    with tf.variable_scope('embedding_layer', reuse=True):
         embeddings = tf.get_variable('embeddings')
 
     fw_cell = tf.contrib.rnn.LSTMCell(num_units=num_units / 2)
@@ -178,7 +136,7 @@ def bidirectional_gru_luong(mode, features, labels, params):
             attn_cell = tf.contrib.seq2seq.AttentionWrapper(
                 cell, attention_mechanism, attention_layer_size=num_units / 2)
             out_cell = tf.contrib.rnn.OutputProjectionWrapper(
-                attn_cell, dst_vocab_size, reuse=reuse
+                attn_cell, vocab_size, reuse=reuse
             )
             decoder = tf.contrib.seq2seq.BasicDecoder(
                 cell=out_cell, helper=helper,
@@ -205,7 +163,7 @@ def bidirectional_gru_luong(mode, features, labels, params):
             attn_cell = tf.contrib.seq2seq.AttentionWrapper(
                 cell, attention_mechanism, attention_layer_size=num_units / 2)
             out_cell = tf.contrib.rnn.OutputProjectionWrapper(
-                attn_cell, dst_vocab_size, reuse=reuse
+                attn_cell, vocab_size, reuse=reuse
             )
 
             decoder_initial_state = attn_cell.zero_state(

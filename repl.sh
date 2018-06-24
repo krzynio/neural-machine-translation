@@ -1,9 +1,8 @@
 #!/bin/bash
 
 ./run.py \
-    --src-vocab files/vocab.pl \
-    --dst-vocab files/vocab.en \
-    --model-dir luong-gru-lstm-unprocessed \
+    --vocab data/light_vocab.txt \
+    --model-dir custom_dataset \
     --mode REPL \
-    --max-sentence-length 39 \
-    --beam-width 5
+    --max-sentence-length 50 \
+    #--beam-width 5

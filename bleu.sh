@@ -1,10 +1,10 @@
 #!/bin/bash
 
 ./run.py \
-    --src-vocab files/vocab.pl \
-    --dst-vocab files/vocab.en \
-    --model-dir luong-gru-lstm-unprocessed \
+    --vocab data/light_vocab.txt \
+    --model-dir custom_dataset \
     --mode BLEU \
-    --src-validation-data $1 --dst-validation-data $2 \
-    --beam-width $3 \
-    --max-sentence-length 39
+    --src-valid-data data/small_src.txt \
+    --dst-valid-data data/small_dst.txt \
+    --max-sentence-length 50 \
+    --beam-width 5

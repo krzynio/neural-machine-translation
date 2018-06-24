@@ -5,6 +5,17 @@ import numpy as np
 import unidecode
 from nltk import word_tokenize
 
+import logging
+
+
+def setup_logger(log_file):
+    fh = logging.FileHandler(log_file)
+    fh.setLevel(logging.INFO)
+    logger = logging.getLogger('nmt')
+    logger.setLevel(logging.INFO)
+    logger.addHandler(fh)
+
+
 def load_vocab(path):
     with open(path) as f:
         words = f.read().split('\n')[:-1]
@@ -14,6 +25,7 @@ def load_vocab(path):
 
 def limit(generator, count):
     return map(lambda x: x[1], filter(lambda x: x[0] < count, enumerate(generator)))
+
 
 def prepare_sentence(sentence):
     def remove_repeating_spaces(sentence):
@@ -29,6 +41,10 @@ def prepare_sentence(sentence):
         return sentence.split(' ')
 
     return remove_repeating_spaces(remove_non_alphanumeric(remove_diacritics(sentence))).strip().lower()
+
+
+def prepare(sentence):
+    return word_tokenize(sentence)
 
 def light_prepare(sentence):
     def remove_diacritics(s):
