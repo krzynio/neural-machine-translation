@@ -39,6 +39,34 @@ def tf_prediction_dataset(sentences, input_vocab, batch_size, padding, end_token
     return input_fn, init_hook
 
 
+def tf_multilang_dataset(input_file, output_file, vocab, batch_size, epochs, padding, end_token, unknown_token):
+    init_hook = IteratorInitializerHook()
+
+    def input_fn():
+        with open(vocab) as f:
+            words = f.read().split('\n')[:-1]
+        vocab_table = tf.contrib.lookup.HashTable(
+            tf.contrib.lookup.KeyValueTensorInitializer(words, list(range(len(words)))), unknown_token)
+
+        input_ds = tf_multilanguage_dataset(input_file, vocab_table, padding, end_token)
+        output_ds = tf_multilanguage_dataset(output_file, vocab_table, padding, end_token)
+
+        ds = tf.data.Dataset.zip((input_ds, output_ds)) \
+            .map(tf_to_model_input) \
+            .batch(batch_size) \
+            .repeat(epochs)
+
+        it = ds.make_initializable_iterator()
+
+        def init_fn(session):
+            session.run(it.initializer)
+
+        init_hook.init_fn = init_fn
+        return it.get_next()
+
+    return input_fn, init_hook
+
+
 def tf_train_dataset(input_file,
                      input_vocab,
                      output_file,
@@ -82,6 +110,11 @@ def tf_language_dataset(file_path, vocab_path, padding, end_token, unknown_token
         words = f.read().split('\n')[:-1]
     vocab_table = tf.contrib.lookup.HashTable(
         tf.contrib.lookup.KeyValueTensorInitializer(words, list(range(len(words)))), unknown_token)
+    return tf.data.TextLineDataset(file_path) \
+        .map(tf_sentence_encoder(vocab_table, padding, end_token))
+
+
+def tf_multilanguage_dataset(file_path, vocab_table, padding, end_token):
     return tf.data.TextLineDataset(file_path) \
         .map(tf_sentence_encoder(vocab_table, padding, end_token))
 

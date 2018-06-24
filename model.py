@@ -5,23 +5,28 @@ import tensorflow as tf
 import tensorflow.contrib.layers as layers
 from utils import limit
 from bleu import compute_bleu
-from data import tf_prediction_dataset, tf_train_dataset
+from data import tf_prediction_dataset, tf_train_dataset, tf_multilang_dataset
 from utils import load_vocab
 from sacremoses import MosesDetokenizer
 
 UNKNOWN_TOKEN = 2
 START_TOKEN = 1
 END_TOKEN = 0
+FR_TOKEN = 3
+EN_TOKEN = 4
+DE_TOKEN = 5
 
 
 class TranslatorModel:
 
     def __init__(self, args, config):
         self.config = config
-        self.src_vocab_encode, self.src_vocab_decode = load_vocab(args.src_vocab)
-        self.dst_vocab_encode, self.dst_vocab_decode = load_vocab(args.dst_vocab)
-        self.src_vocab_size = len(self.src_vocab_encode)
-        self.dst_vocab_size = len(self.dst_vocab_encode)
+        self.vocab_encode, self.vocab_decode = load_vocab(args.vocab)
+        self.vocab_size = len(self.vocab_encode)
+        # self.src_vocab_encode, self.src_vocab_decode = load_vocab(args.src_vocab)
+        # self.dst_vocab_encode, self.dst_vocab_decode = load_vocab(args.dst_vocab)
+        # self.src_vocab_size = len(self.src_vocab_encode)
+        # self.dst_vocab_size = len(self.dst_vocab_encode)
         self.args = args
         self.detokenizer = MosesDetokenizer()
         self.padding = self.args.max_sentence_length + 1
@@ -32,8 +37,7 @@ class TranslatorModel:
                                                     'embed_dim': args.embedding_size,
                                                     'num_units': args.cell_units,
                                                     'max_length': self.padding,
-                                                    'src_vocab_size': self.src_vocab_size,
-                                                    'dst_vocab_size': self.dst_vocab_size,
+                                                    'vocab_size': self.vocab_size,
                                                     'start_token': START_TOKEN,
                                                     'end_token': END_TOKEN,
                                                     'beam_width': args.beam_width
@@ -57,7 +61,7 @@ class TranslatorModel:
             for t in tokens:
                 if t == END_TOKEN:
                     return
-                yield self.dst_vocab_decode[t]
+                yield self.vocab_decode[t]
 
         input_fn, init_hook = tf_prediction_dataset(sentences, self.args.src_vocab, 128,
                                                     self.padding, END_TOKEN, UNKNOWN_TOKEN)
@@ -87,22 +91,20 @@ class TranslatorModel:
         test_data = load_test_data()
 
         for epoch in range(epochs):
-            train_input_fn, train_init_hook = tf_train_dataset(
+            train_input_fn, train_init_hook = tf_multilang_dataset(
                 self.args.src_train_data,
-                self.args.src_vocab,
+                self.args.multilang_vocab,
                 self.args.dst_train_data,
-                self.args.dst_vocab,
                 batch_size=self.args.batch_size,
                 epochs=1,
                 padding=self.padding,
                 end_token=END_TOKEN,
                 unknown_token=UNKNOWN_TOKEN)
 
-            eval_input_fn, eval_init_hook = tf_train_dataset(
+            eval_input_fn, eval_init_hook = tf_multilang_dataset(
                 self.args.src_validation_data,
-                self.args.src_vocab,
                 self.args.dst_validation_data,
-                self.args.dst_vocab,
+                self.args.multilang_vocab,
                 batch_size=self.args.batch_size,
                 epochs=1,
                 padding=self.padding,
@@ -128,8 +130,9 @@ class TranslatorModel:
 
 
 def bidirectional_gru_luong(mode, features, labels, params):
-    src_vocab_size = params['src_vocab_size']
-    dst_vocab_size = params['dst_vocab_size']
+    vocab_size = params['vocab_size']
+    # src_vocab_size = params['src_vocab_size']
+    # dst_vocab_size = params['dst_vocab_size']
     embed_dim = params['embed_dim']
     num_units = params['num_units']
     max_length = params['max_length']
@@ -147,12 +150,12 @@ def bidirectional_gru_luong(mode, features, labels, params):
     lengths = tf.to_int32(tf.fill([batch_size], max_length))
 
     input_embed = layers.embed_sequence(
-        inp, vocab_size=src_vocab_size, scope='embed_input', embed_dim=embed_dim)
+        inp, vocab_size=vocab_size, scope='embedding_scope', embed_dim=embed_dim)
 
     output_embed = layers.embed_sequence(
-        train_output, vocab_size=dst_vocab_size, scope='embed_output', embed_dim=embed_dim)
+        train_output, vocab_size=vocab_size, scope='embedding_scope', embed_dim=embed_dim, reuse=True)
 
-    with tf.variable_scope('embed_output', reuse=True):
+    with tf.variable_scope('embedding_scope', reuse=True):
         embeddings = tf.get_variable('embeddings')
 
     fw_cell = tf.contrib.rnn.LSTMCell(num_units=num_units / 2)
@@ -178,7 +181,7 @@ def bidirectional_gru_luong(mode, features, labels, params):
             attn_cell = tf.contrib.seq2seq.AttentionWrapper(
                 cell, attention_mechanism, attention_layer_size=num_units / 2)
             out_cell = tf.contrib.rnn.OutputProjectionWrapper(
-                attn_cell, dst_vocab_size, reuse=reuse
+                attn_cell, vocab_size, reuse=reuse
             )
             decoder = tf.contrib.seq2seq.BasicDecoder(
                 cell=out_cell, helper=helper,
@@ -205,7 +208,7 @@ def bidirectional_gru_luong(mode, features, labels, params):
             attn_cell = tf.contrib.seq2seq.AttentionWrapper(
                 cell, attention_mechanism, attention_layer_size=num_units / 2)
             out_cell = tf.contrib.rnn.OutputProjectionWrapper(
-                attn_cell, dst_vocab_size, reuse=reuse
+                attn_cell, vocab_size, reuse=reuse
             )
 
             decoder_initial_state = attn_cell.zero_state(
