@@ -93,8 +93,8 @@ class TranslatorModel:
         for epoch in range(epochs):
             train_input_fn, train_init_hook = tf_multilang_dataset(
                 self.args.src_train_data,
-                self.args.vocab,
                 self.args.dst_train_data,
+                self.args.vocab,
                 batch_size=self.args.batch_size,
                 epochs=1,
                 padding=self.padding,
