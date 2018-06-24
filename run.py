@@ -57,7 +57,7 @@ def train(args, translator):
                      epochs=args.epochs_count,
                      batch_size=args.batch_size,
                      validation_dataset=valid_ds,
-                     predict_samples=20)
+                     predict_samples=100)
 
 
 def bleu(args, translator):

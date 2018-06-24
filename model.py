@@ -33,7 +33,7 @@ class TranslatorModel:
                                                 },
                                                 config=config)
 
-    def train(self, train_dataset, epochs=1, batch_size=128, validation_dataset=None, predict_samples=20):
+    def train(self, train_dataset, epochs=1, batch_size=128, validation_dataset=None, predict_samples=100):
         self.logger.info('Began training')
         for epoch in range(epochs):
             self.logger.info('Starting epoch {}'.format(epoch))
@@ -53,7 +53,6 @@ class TranslatorModel:
                                                                        limit=predict_samples,
                                                                        return_raw=True)
                 for s, d, t in zip(src, dst, self.translate(generator)):
-                    print(t)
                     self.logger.info('SRC: {}'.format(s))
                     self.logger.info('DST: {}'.format(d))
                     self.logger.info('TRANSLATION: {}'.format(t))
