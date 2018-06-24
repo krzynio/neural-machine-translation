@@ -11,7 +11,6 @@ from dataset import make_input_fn, Vocabulary
 
 
 class TranslatorModel:
-
     def __init__(self, args, config):
         self.config = config
         self.vocab = Vocabulary(args.vocab)
@@ -33,14 +32,19 @@ class TranslatorModel:
                                                 },
                                                 config=config)
 
-    def train(self, train_dataset, epochs=1, batch_size=128, validation_dataset=None, predict_samples=100):
+    def train(self,
+              train_dataset,
+              epochs=1,
+              batch_size=128,
+              validation_dataset=None,
+              predict_samples=100):
         self.logger.info('Began training')
         for epoch in range(epochs):
             self.logger.info('Starting epoch {}'.format(epoch))
             input_fn, hooks = self.__prepare_input(train_dataset.new_generator(batch_size=batch_size,
                                                                                max_length=self.max_len))
             self.estimator.train(input_fn=input_fn, hooks=hooks)
-            self.logger.info('Epoch {} finished'.format(epoch))
+            self.logger.info('Epoch {} finished'.format(epoch + 1))
 
             if validation_dataset is not None:
                 self.logger.info('Evaluating validation set')
@@ -57,6 +61,14 @@ class TranslatorModel:
                     self.logger.info('DST: {}'.format(d))
                     self.logger.info('TRANSLATION: {}'.format(t))
                     self.logger.info('---')
+
+            for name, lang in [('DE -> EN', '<2en>'), ('EN -> FR', '<2fr>')]:
+                generator, refs = validation_dataset.new_generator_lang_with_refs(batch_size,
+                                                                                  self.max_len,
+                                                                                  lang)
+                refs = list(map(lambda x: x.split(' '), refs))
+                bleu_score = self.calculate_bleu(generator, refs)[0]
+                self.logger.info('{} BLEU: {}'.format(name, bleu_score))
 
     def translate(self, generator, return_tokens=False):
         input_fn, hooks = self.__prepare_input(generator)

@@ -8,6 +8,9 @@ class Vocabulary:
     START_TOKEN = 1
     UNK_TOKEN = 2
 
+    FR_LANG = '<2fr>'
+    EN_LANG = '<2en>'
+
     def __init__(self, path):
         self.__read(path)
         self.size = len(self.__word2ind)
@@ -64,11 +67,21 @@ def make_input_fn(generator):
 
 
 class DataSet:
-
     def __init__(self, src_file, dst_file, vocab):
         self.vocab = vocab
         self.__read(src_file, dst_file)
         self.logger = logging.getLogger('nmt.dataset_{}_{}'.format(src_file, dst_file))
+
+    def new_generator_lang_with_refs(self, batch_size, max_length, language):
+        idx = list(range(len(self.src_data)))
+        idx = [id for id in idx if self.src_data[id].startswith(language)]
+        sentences = [self.src_data[id] for id in idx]
+        references = [self.dst_data[id] for id in idx]
+        generator = DataSet.generator_from_list(sentences,
+                                                self.vocab,
+                                                batch_size=batch_size,
+                                                max_length=max_length)
+        return generator, references
 
     def new_generator(self, batch_size, max_length, limit=None, return_raw=False):
         elements = np.random.permutation(list(range(len(self.src_data)))).tolist()
@@ -83,8 +96,12 @@ class DataSet:
             return generator
 
     def __make_generator(self, elements, batch_size, max_length):
+        rem = 100000
         while len(elements) > 0:
-            self.logger.info('Remaining elements: {}'.format(len(elements)))
+            rem -= batch_size
+            if rem < 0:
+                rem = 100000
+                self.logger.info('Remaining elements: {}'.format(len(elements)))
             batch_idx = elements[:batch_size]
             elements = elements[batch_size:]
             src_batch = [self.src_data[i] for i in batch_idx]
