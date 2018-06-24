@@ -40,7 +40,7 @@ class TranslatorModel:
               predict_samples=100):
         self.logger.info('Began training')
         for epoch in range(epochs):
-            self.logger.info('Starting epoch {}'.format(epoch))
+            self.logger.info('Starting epoch {}'.format(epoch + 1))
             input_fn, hooks = self.__prepare_input(train_dataset.new_generator(batch_size=batch_size,
                                                                                max_length=self.max_len))
             self.estimator.train(input_fn=input_fn, hooks=hooks)
@@ -62,7 +62,7 @@ class TranslatorModel:
                     self.logger.info('TRANSLATION: {}'.format(t))
                     self.logger.info('---')
 
-            for name, lang in [('DE -> EN', '<2en>'), ('EN -> FR', '<2fr>')]:
+            for name, lang in [('DE -> EN', Vocabulary.EN_LANG), ('EN -> FR', Vocabulary.FR_LANG)]:
                 generator, refs = validation_dataset.new_generator_lang_with_refs(batch_size,
                                                                                   self.max_len,
                                                                                   lang)
