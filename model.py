@@ -94,6 +94,7 @@ class TranslatorModel:
 
     def calculate_bleu(self, generator, references):
         translations = self.translate(generator, return_tokens=True)
+        references = list(map(lambda x: self.vocab.with_unks(x), references))
         return compute_bleu(references, translations)
 
 
