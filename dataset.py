@@ -15,6 +15,10 @@ class Vocabulary:
         self.__read(path)
         self.size = len(self.__word2ind)
 
+    def with_unks(self, sentence):
+        unk = self.decode_word(Vocabulary.UNK_TOKEN)
+        return list(map(lambda x: unk if x not in self.__word2ind else x,sentence.split(' ')))
+
     def encode_word(self, word):
         return self.__word2ind.get(word, Vocabulary.UNK_TOKEN)
 
@@ -125,3 +129,8 @@ class DataSet:
             sentences = sentences[batch_size:]
             encoded = np.array(list(map(lambda x: vocab.encode_sentence(x, max_length), selected)))
             yield (encoded, encoded)
+
+
+if __name__ == '__main__':
+    v = Vocabulary('vocab')
+    print(v.with_unks('a b c d e f g h i j k l m n o p'))
