@@ -62,13 +62,17 @@ class TranslatorModel:
                     self.logger.info('TRANSLATION: {}'.format(t))
                     self.logger.info('---')
 
-            for name, lang in [('DE -> EN', Vocabulary.EN_LANG), ('EN -> FR', Vocabulary.FR_LANG)]:
-                generator, refs = validation_dataset.new_generator_lang_with_refs(batch_size,
-                                                                                  self.max_len,
-                                                                                  lang)
-                refs = list(map(lambda x: x.split(' '), refs))
-                bleu_score = self.calculate_bleu(generator, refs)[0]
-                self.logger.info('{} BLEU: {}'.format(name, bleu_score))
+#            for name, lang in [('DE -> EN', Vocabulary.EN_LANG), ('EN -> FR', Vocabulary.FR_LANG)]:
+#                generator, refs = validation_dataset.new_generator_lang_with_refs(batch_size,
+#                                                                                  self.max_len,
+#                                                                                  lang)
+#                for r in refs[:5]:
+#                    print(r)
+                #refs = list(map(lambda x: x.split(' '), refs))
+                #bleu_score = self.calculate_bleu(generator, refs)[0]
+                #self.logger.info('{} BLEU: {}'.format(name, bleu_score))
+#            return
+#        return
 
     def translate(self, generator, return_tokens=False):
         input_fn, hooks = self.__prepare_input(generator)
