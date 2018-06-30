@@ -1,36 +1,21 @@
 #!/usr/bin/env python3
 import logging
 
-from bleu import compute_bleu
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.layers as layers
+
+from bleu import compute_bleu
+from dataset import make_input_fn, Vocabulary
 from sacremoses import MosesDetokenizer
 
-from dataset import make_input_fn, Vocabulary
+class TranslationModel:
 
-
-class TranslatorModel:
-    def __init__(self, args, config):
-        self.config = config
-        self.vocab = Vocabulary(args.vocab)
-        self.args = args
-        self.detokenizer = MosesDetokenizer()
-        self.max_len = self.args.max_sentence_length
-        self.beam_width = args.beam_width
-        self.logger = logging.getLogger('nmt.model')
-        self.estimator = tf.estimator.Estimator(model_fn=bidirectional_gru_luong,
-                                                model_dir=args.model_dir,
-                                                params={
-                                                    'embed_dim': args.embedding_size,
-                                                    'num_units': args.cell_units,
-                                                    'max_length': self.max_len + 1,
-                                                    'vocab_size': self.vocab.size,
-                                                    'start_token': Vocabulary.START_TOKEN,
-                                                    'end_token': Vocabulary.END_TOKEN,
-                                                    'beam_width': args.beam_width
-                                                },
-                                                config=config)
+    def __init__(self, vocab, estimator, max_len, logger):
+        self.vocab = vocab
+        self.estimator = estimator
+        self.max_len = max_len
+        self.logger = logger
 
     def train(self,
               train_dataset,
@@ -38,17 +23,19 @@ class TranslatorModel:
               batch_size=128,
               validation_dataset=None,
               predict_samples=100):
+
         self.logger.info('Began training')
+
         for epoch in range(epochs):
             self.logger.info('Starting epoch {}'.format(epoch + 1))
-            input_fn, hooks = self.__prepare_input(train_dataset.new_generator(batch_size=batch_size,
-                                                                               max_length=self.max_len))
+            input_fn, hooks = self.prepare_input(train_dataset.new_generator(batch_size=batch_size,
+                                                                             max_length=self.max_len))
             self.estimator.train(input_fn=input_fn, hooks=hooks)
             self.logger.info('Epoch {} finished'.format(epoch + 1))
 
             if validation_dataset is not None:
                 self.logger.info('Evaluating validation set')
-                validation_loss = self.__evaluate(validation_dataset, batch_size=batch_size)
+                validation_loss = self.evaluate(validation_dataset, batch_size=batch_size)
                 self.logger.info('Validation loss: {}'.format(validation_loss))
 
             if predict_samples is not None:
@@ -62,20 +49,60 @@ class TranslatorModel:
                     self.logger.info('TRANSLATION: {}'.format(t))
                     self.logger.info('---')
 
-#            for name, lang in [('DE -> EN', Vocabulary.EN_LANG), ('EN -> FR', Vocabulary.FR_LANG)]:
-#                generator, refs = validation_dataset.new_generator_lang_with_refs(batch_size,
-#                                                                                  self.max_len,
-#                                                                                  lang)
-#                for r in refs[:5]:
-#                    print(r)
-                #refs = list(map(lambda x: x.split(' '), refs))
-                #bleu_score = self.calculate_bleu(generator, refs)[0]
-                #self.logger.info('{} BLEU: {}'.format(name, bleu_score))
-#            return
-#        return
+            for name, lang in [('DE -> EN', Vocabulary.EN_LANG), ('EN -> FR', Vocabulary.FR_LANG)]:
+                generator, refs = validation_dataset.new_generator_lang_with_refs(batch_size,
+                                                                                  self.max_len,
+                                                                                  lang)
+                bleu_score = self.calculate_bleu(generator, refs)[0]
+                self.logger.info('{} BLEU: {}'.format(name, bleu_score))
 
     def translate(self, generator, return_tokens=False):
-        input_fn, hooks = self.__prepare_input(generator)
+        raise NotImplementedError()
+
+    def calculate_bleu(self, generator, references):
+        translations = self.translate(generator, return_tokens=True)
+        references = list(map(lambda x: [self.vocab.with_unks(x)], references))
+        return compute_bleu(references, translations)
+
+    def prepare_input(self, generator):
+        input_fn, feed_fn = make_input_fn(generator)
+        hooks = [tf.train.FeedFnHook(feed_fn)]
+        return input_fn, hooks
+
+    def evaluate(self, validation_ds, batch_size):
+        generator = validation_ds.new_generator(batch_size=batch_size,
+                                                max_length=self.max_len)
+        input_fn, hooks = self.prepare_input(generator)
+        return self.estimator.evaluate(input_fn=input_fn,
+                                       hooks=hooks)
+
+
+class EncoderDecoderModel(TranslationModel):
+
+    def __init__(self, args, config):
+        self.vocab = Vocabulary(args.vocab)
+        self.logger = logging.getLogger('nmt.rnn.model')
+        self.config = config
+        self.args = args
+        self.detokenizer = MosesDetokenizer()
+        self.max_len = self.args.max_sentence_length
+        self.beam_width = args.beam_width
+        self.estimator = tf.estimator.Estimator(model_fn=bidirectional_gru_luong,
+                                                model_dir=args.model_dir,
+                                                params={
+                                                    'embed_dim': args.embedding_size,
+                                                    'num_units': args.cell_units,
+                                                    'max_length': self.max_len + 1,
+                                                    'vocab_size': self.vocab.size,
+                                                    'start_token': Vocabulary.START_TOKEN,
+                                                    'end_token': Vocabulary.END_TOKEN,
+                                                    'beam_width': args.beam_width
+                                                },
+                                                config=config)
+        super().__init__(self.vocab, self.estimator, self.max_len, self.logger)
+
+    def translate(self, generator, return_tokens=False):
+        input_fn, hooks = self.prepare_input(generator)
         for translation in self.estimator.predict(input_fn=input_fn, hooks=hooks):
             token_idx = np.transpose(translation)[0] if self.beam_width is not None else np.argmax(translation, axis=1)
             tokens = self.vocab.decode_sentence(token_idx, return_tokens=True)
@@ -83,23 +110,6 @@ class TranslatorModel:
                 yield tokens
             else:
                 yield self.detokenizer.detokenize(tokens)
-
-    def __evaluate(self, validation_ds, batch_size):
-        generator = validation_ds.new_generator(batch_size=batch_size,
-                                                max_length=self.max_len)
-        input_fn, hooks = self.__prepare_input(generator)
-        return self.estimator.evaluate(input_fn=input_fn,
-                                       hooks=hooks)
-
-    def __prepare_input(self, generator):
-        input_fn, feed_fn = make_input_fn(generator)
-        hooks = [tf.train.FeedFnHook(feed_fn)]
-        return input_fn, hooks
-
-    def calculate_bleu(self, generator, references):
-        translations = self.translate(generator, return_tokens=True)
-        references = list(map(lambda x: [self.vocab.with_unks(x)], references))
-        return compute_bleu(references, translations)
 
 
 def bidirectional_gru_luong(mode, features, labels, params):
