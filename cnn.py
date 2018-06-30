@@ -72,6 +72,7 @@ def cnn(mode, features, labels, params):
         embeddings = tf.get_variable('embeddings')
 
     def encoder_block(inp, n_hidden, filter_size):
+        # simple convolution with special padding
         inp = tf.expand_dims(inp, 2)
         inp = tf.pad(inp, [[0, 0], [(filter_size[0] - 1) // 2, (filter_size[0] - 1) // 2], [0, 0], [0, 0]])
         conv = slim.convolution(inp, n_hidden, filter_size, data_format="NHWC", padding="VALID", activation_fn=None)
@@ -79,6 +80,7 @@ def cnn(mode, features, labels, params):
         return conv
 
     def decoder_block(inp, n_hidden, filter_size):
+        # simple convolution with special padding
         inp = tf.expand_dims(inp, 2)
         inp = tf.pad(inp, [[0, 0], [filter_size[0] - 1, 0], [0, 0], [0, 0]])
         conv = slim.convolution(inp, n_hidden, filter_size, data_format="NHWC", padding="VALID", activation_fn=None)
@@ -86,20 +88,26 @@ def cnn(mode, features, labels, params):
         return conv
 
     def glu(x):
+        # aaa|bbb -> aaa*sigmoid(bbb), where sigmoid(bbb) - gate,
+        # which decides what's important
         res = tf.multiply(x[:, :, :tf.shape(x)[2] // 2], tf.sigmoid(x[:, :, tf.shape(x)[2] // 2:]))
         return res
 
     def layer(inp, conv_block, kernel_width, n_hidden, residual=None):
+        # glu(convolution) + residual
         z = conv_block(inp, n_hidden, (kernel_width, 1))
         res = glu(z) + (residual if residual is not None else 0)
         return res
 
     def encoder(inp, n_layers):
         with tf.variable_scope("encoder", reuse=tf.AUTO_REUSE):
+            # linear mapping of embedding to hidden size
             inp = e = slim.linear(tf.nn.dropout(inp, dropout_keep_prob), n_hidden)
             z = None
             for i in range(n_layers):
+                # encoder layer result
                 z = layer(inp, encoder_block, 3, n_hidden * 2, inp)
+                # apply dropout
                 z = tf.nn.dropout(z, dropout_keep_prob)
                 inp = z
             return z, z + e
@@ -109,19 +117,29 @@ def cnn(mode, features, labels, params):
             inp = g = slim.linear(tf.nn.dropout(inp, dropout_keep_prob), n_hidden)
             h = None
             for i in range(n_layers):
+                # decoder layer result
                 attn_res = h = layer(inp, decoder_block, 3, n_hidden * 2, residual=tf.zeros_like(inp))
+                # add embedding of previous target element to current decoder state
                 d = slim.linear(h, n_hidden) + g
+                # calculate dot product between decoder state summary and last encoder block
                 dz = tf.matmul(d, tf.transpose(zu, [0, 2, 1]))
+                # attention
                 a = tf.nn.softmax(dz)
+                # context
                 c = tf.matmul(a, ze)
+                # decoder layer result
                 h = slim.linear(attn_res + c, n_hidden)
+                # dropout
                 h = tf.nn.dropout(h, dropout_keep_prob)
                 inp = h
             return h
 
+    # zu - output of last encoder block
+    # ze - sum of output of last encoder block and input embeddings
     zu, ze = encoder(input_embed, n_layers)
+    # decoder result
     hg = decoder(output_embed, zu, ze, n_layers)
-
+    # predictions
     logits = slim.fully_connected(hg, vocab_size)
     logits = logits[:, :-1]
     pred = tf.nn.softmax(logits)
@@ -137,6 +155,7 @@ def cnn(mode, features, labels, params):
     logits_shape = tf.shape(logits)
     logits = tf.reshape(logits, [logits_shape[0] * logits_shape[1], vocab_size])
 
+    # check if this is ok
     labels = train_output[:, 1:]
     labels = tf.reshape(labels, [-1, ])
     loss_mask = labels > 0
