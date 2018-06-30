@@ -68,8 +68,12 @@ def cnn(mode, features, labels, params):
     output_embed = tf.contrib.layers.embed_sequence(
         train_output, vocab_size=vocab_size, scope='embedding_layer', embed_dim=embed_dim, reuse=True)
 
-    with tf.variable_scope('embedding_layer', reuse=True):
-        embeddings = tf.get_variable('embeddings')
+    # TODO: add positional embeddings!
+    # TODO: rewrite blocks to use padding = "SAME"
+    # TODO: rewrite decoder to use previous decoder state for attention (starting with zeros)
+    # TODO: check if `labels = train_output[:, 1:]` is OK
+    # TODO: initialize weights and normalize gradients according to specification
+    # TODO: rewrite using architecture definitions, only provide data, vocab and model path in scripts
 
     def encoder_block(inp, n_hidden, filter_size):
         # simple convolution with special padding
@@ -155,7 +159,6 @@ def cnn(mode, features, labels, params):
     logits_shape = tf.shape(logits)
     logits = tf.reshape(logits, [logits_shape[0] * logits_shape[1], vocab_size])
 
-    # check if this is ok
     labels = train_output[:, 1:]
     labels = tf.reshape(labels, [-1, ])
     loss_mask = labels > 0
