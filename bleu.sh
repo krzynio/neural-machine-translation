@@ -1,10 +1,12 @@
 #!/bin/bash
 
 ./run.py \
-    --vocab data/light_vocab.txt \
-    --model-dir custom_dataset \
+    --vocab data/lvocab.txt \
+    --model-dir models/multilingual_vocab100k_embed128 \
     --mode BLEU \
-    --src-valid-data data/small_src.txt \
-    --dst-valid-data data/small_dst.txt \
+    --src-valid-data data/zeroshot5k.src \
+    --dst-valid-data data/zeroshot5k.dst \
     --max-sentence-length 50 \
-    --beam-width 5
+    --batch-size 32 \
+    --embedding-size 128 #\
+    #--beam-width 10

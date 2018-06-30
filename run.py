@@ -62,13 +62,13 @@ def train(args, translator):
 
 def bleu(args, translator):
     ds = DataSet(args.src_valid_data, args.dst_valid_data, translator.vocab)
-    generator, _, references = ds.new_generator(batch_size=args.batch_size,
-                                                max_length=args.max_sentence_length,
-                                                limit=100,
-                                                return_raw=True)
-    references = [r.split(' ') for r in references]
-    bleu = translator.calculate_bleu(generator, references)
-    print('BLEU = {}'.format(bleu[0]))
+    generator, _, refs = ds.new_generator(batch_size=args.batch_size, max_length=args.max_sentence_length, return_raw=True)
+    print('BLEU : {}'.format(translator.calculate_bleu(generator, refs)[0]))
+    #from dataset import Vocabulary
+    #for name, lang in [('EN -> FR', Vocabulary.FR_LANG), ('GER -> EN', Vocabulary.EN_LANG)]:
+    #    generator, refs = ds.new_generator_lang_with_refs(batch_size = args.batch_size, max_length = args.max_sentence_length, language = lang)
+    #    bleu = translator.calculate_bleu(generator, refs)
+    #    print('{} BLEU = {}'.format(name, bleu[0]))
 
 
 def repl(args, translator):
@@ -94,6 +94,7 @@ def main():
         log_step_count_steps=100
     )
     args = parse_arguments()
+    print(args)
     setup_logger(args.log_file)
     translator = TranslatorModel(args, config)
 

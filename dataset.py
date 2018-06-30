@@ -76,9 +76,9 @@ class DataSet:
         self.__read(src_file, dst_file)
         self.logger = logging.getLogger('nmt.dataset_{}_{}'.format(src_file, dst_file))
 
-    def new_generator_lang_with_refs(self, batch_size, max_length, language):
+    def new_generator_lang_with_refs(self, batch_size, max_length, language, limit=1000):
         idx = list(range(len(self.src_data)))
-        idx = [id for id in idx if self.src_data[id].startswith(language)]
+        idx = [id for id in idx if self.src_data[id].startswith(language)][:limit]
         sentences = [self.src_data[id] for id in idx]
         references = [self.dst_data[id] for id in idx]
         generator = DataSet.generator_from_list(sentences,
